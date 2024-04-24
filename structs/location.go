@@ -8,4 +8,3 @@ type Location struct {
 func (loc Location) IsInvalid() bool {
 	return loc.Column == -1 && loc.Row == -1
 }
-

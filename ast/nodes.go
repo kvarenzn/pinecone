@@ -21,8 +21,7 @@ func (n *node) Range() (structs.Location, structs.Location) {
 }
 
 func WithRange(node Node, begin, end structs.Location) Node {
-	node.SetBegin(begin)
-	node.SetEnd(end)
+	node.SetRange(begin, end)
 	return node
 }
 

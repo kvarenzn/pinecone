@@ -228,3 +228,12 @@ var KEYWORDS = map[string]TokenType{
 	"true":  TRUE,
 	"false": FALSE,
 }
+
+func (tt TokenType) In(tts ...TokenType) bool {
+	for _, t := range tts {
+		if t == tt {
+			return true
+		}
+	}
+	return false
+}

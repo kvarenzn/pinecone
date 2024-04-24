@@ -189,7 +189,7 @@ func (p *parser) hasTokenBeforeNewLine(tt tokenizer.TokenType) bool {
 	offset := 1
 	for {
 		t := p.peekType(offset)
-		if t == tokenizer.UNKNOWN || t == tokenizer.NEWLINE || t == tokenizer.INDENT || t == tokenizer.DEDENT {
+		if t.In(tokenizer.UNKNOWN, tokenizer.NEWLINE, tokenizer.INDENT, tokenizer.DEDENT) {
 			break
 		}
 		if t == tt {
@@ -305,8 +305,7 @@ func (p *parser) parseType(silent bool) ast.Node {
 func (p *parser) parseTypeArgList(silent bool) []ast.Node {
 	typeArgs := []ast.Node{}
 	for {
-		tt := p.peekType(0)
-		if tt == tokenizer.UNKNOWN || tt == tokenizer.RIGHT_ANG_BRACKET || tt == tokenizer.NEWLINE {
+		if p.peekType(0).In(tokenizer.UNKNOWN, tokenizer.RIGHT_ANG_BRACKET, tokenizer.NEWLINE) {
 			break
 		}
 		typeArg := p.parseType(silent)
@@ -334,8 +333,7 @@ func (p *parser) parseTupleAtom(silent bool) ast.Node {
 	}
 
 	for {
-		tt := p.peekType(0)
-		if tt == tokenizer.UNKNOWN || tt == tokenizer.RIGHT_SQ_BRACKET || tt == tokenizer.NEWLINE {
+		if p.peekType(0).In(tokenizer.UNKNOWN, tokenizer.RIGHT_SQ_BRACKET, tokenizer.NEWLINE) {
 			break
 		}
 		item := p.parseTestExpr(silent)
@@ -470,7 +468,7 @@ func (p *parser) parseArgList(silent bool) []ast.Node {
 	args := []ast.Node{}
 	for {
 		token := p.peek(0)
-		if token == nil || token.Type == tokenizer.RIGHT_PAREN || token.Type == tokenizer.NEWLINE {
+		if token == nil || token.Type.In(tokenizer.RIGHT_PAREN, tokenizer.NEWLINE) {
 			break
 		}
 
@@ -1103,7 +1101,7 @@ func (p *parser) parseParamDecl() ast.Node {
 		return nil
 	}
 
-	if p.peekType(0) == tokenizer.EQUAL || p.peekType(0) == tokenizer.COMMA || p.peekType(0) == tokenizer.RIGHT_PAREN {
+	if p.peekType(0).In(tokenizer.EQUAL, tokenizer.COMMA, tokenizer.RIGHT_PAREN) {
 		var def *tokenizer.Token = nil
 		if p.consume(tokenizer.EQUAL) != nil {
 			def = p.peek(0)
@@ -1257,7 +1255,7 @@ func (p *parser) parseMemberDecl() ast.Node {
 		return nil
 	}
 
-	if p.peekType(0) == tokenizer.EQUAL || p.peekType(0) == tokenizer.NEWLINE || p.peekType(0) == tokenizer.DEDENT {
+	if p.peekType(0).In(tokenizer.EQUAL, tokenizer.NEWLINE, tokenizer.DEDENT) {
 		var def *tokenizer.Token = nil
 		if p.consume(tokenizer.EQUAL) != nil {
 			def = p.peek(0)
@@ -1491,7 +1489,7 @@ func (p *parser) parseStmt() ast.Node {
 			return p.parseFuncDeclStmt()
 		} else if p.peekType(1) == tokenizer.EQUAL {
 			return p.parseVarDeclStmt()
-		} else if p.peekType(1) == tokenizer.COLON_EQUAL || p.peekType(1) == tokenizer.PLUS_EQUAL || p.peekType(1) == tokenizer.MINUS_EQUAL || p.peekType(1) == tokenizer.STAR_EQUAL || p.peekType(1) == tokenizer.SLASH_EQUAL || p.peekType(1) == tokenizer.PERCENT_EQUAL {
+		} else if p.peekType(1).In(tokenizer.COLON_EQUAL, tokenizer.PLUS_EQUAL, tokenizer.MINUS_EQUAL, tokenizer.STAR_EQUAL, tokenizer.SLASH_EQUAL, tokenizer.PERCENT_EQUAL) {
 			return p.parseReassignStmt()
 		} else {
 			begin := p.tell()
