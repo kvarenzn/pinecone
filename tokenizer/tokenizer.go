@@ -1,6 +1,10 @@
 package tokenizer
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/kvarenzn/pinecone/structs"
+)
 
 func isDecimal(r rune) bool {
 	return r >= '0' && r <= '9'
@@ -19,13 +23,17 @@ func isIdentifierRune(r rune) bool {
 }
 
 type tokenizer struct {
-	source  []rune
-	start   int
-	current int
-	row     int
-	col     int
-	tokens  []Token
-	indents []int
+	source     []rune
+	start      int
+	current    int
+	startRow   int
+	startCol   int
+	currentRow int
+	currentCol int
+	prevRow    int
+	prevCol    int
+	tokens     []Token
+	indents    []int
 }
 
 const eof rune = -1
@@ -47,11 +55,14 @@ func (ts *tokenizer) consume() {
 		return
 	}
 
+	ts.prevCol = ts.currentCol
+	ts.prevRow = ts.currentRow
+
 	if ts.peek(0) == '\n' || ts.peek(0) == '\r' && ts.peek(1) != '\n' {
-		ts.col = 0
-		ts.row++
+		ts.currentCol = 1
+		ts.currentRow++
 	} else {
-		ts.col++
+		ts.currentCol++
 	}
 
 	ts.current++
@@ -84,13 +95,21 @@ func (ts tokenizer) takeAs(tt TokenType) Token {
 	return Token{
 		Type:   tt,
 		Lexeme: ts.take(),
-		Row:    ts.row,
-		Col:    ts.col,
+		Begin: structs.Location{
+			Row:    ts.startRow,
+			Column: ts.startCol,
+		},
+		End: structs.Location{
+			Row:    ts.prevRow,
+			Column: ts.prevCol,
+		},
 	}
 }
 
 func (ts *tokenizer) fastForward() {
 	ts.start = ts.current
+	ts.startRow = ts.currentRow
+	ts.startCol = ts.currentCol
 }
 
 func (t *tokenizer) record(tt TokenType) {
@@ -345,13 +364,17 @@ func (t *tokenizer) scanToken() {
 
 func Tokenize(source string) []Token {
 	t := &tokenizer{
-		source:  []rune(source),
-		start:   0,
-		current: 0,
-		row:     0,
-		col:     0,
-		tokens:  []Token{},
-		indents: []int{0},
+		source:     []rune(source),
+		start:      0,
+		current:    0,
+		startRow:   1,
+		startCol:   1,
+		prevRow:    1,
+		prevCol:    1,
+		currentRow: 1,
+		currentCol: 1,
+		tokens:     []Token{},
+		indents:    []int{0},
 	}
 
 	if !t.eof() {

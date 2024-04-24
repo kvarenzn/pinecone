@@ -2,13 +2,15 @@ package tokenizer
 
 import (
 	"fmt"
+
+	"github.com/kvarenzn/pinecone/structs"
 )
 
 type Token struct {
 	Type   TokenType
 	Lexeme string
-	Row    int
-	Col    int
+	Begin  structs.Location
+	End    structs.Location
 }
 
 func (t Token) String() string {

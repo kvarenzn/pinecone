@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kvarenzn/pinecone/ast"
 	"github.com/kvarenzn/pinecone/tokenizer"
 )
 
-func parseNumber(token tokenizer.Token) Expr {
+func parseNumber(token tokenizer.Token) ast.Node {
 	if token.Type != tokenizer.NUMBER {
 		return nil
 	}
@@ -18,20 +19,20 @@ func parseNumber(token tokenizer.Token) Expr {
 		if err != nil {
 			return nil
 		}
-		return FloatLiteral{
+		return ast.WithRange(&ast.FloatLiteral{
 			Value: num,
-		}
+		}, token.Begin, token.End)
 	}
 	num, err := strconv.ParseInt(lexeme, 10, 64)
 	if err != nil {
 		return nil
 	}
-	return IntLiteral{
+	return ast.WithRange(&ast.IntLiteral{
 		Value: num,
-	}
+	}, token.Begin, token.End)
 }
 
-func parseString(token tokenizer.Token) Expr {
+func parseString(token tokenizer.Token) ast.Node {
 	if token.Type != tokenizer.STRING {
 		return nil
 	}
@@ -48,12 +49,12 @@ func parseString(token tokenizer.Token) Expr {
 		return nil
 	}
 
-	return StringLiteral{
+	return ast.WithRange(&ast.StringLiteral{
 		Value: str,
-	}
+	}, token.Begin, token.End)
 }
 
-func parseColor(token tokenizer.Token) Expr {
+func parseColor(token tokenizer.Token) ast.Node {
 	if token.Type != tokenizer.COLOR {
 		return nil
 	}
@@ -67,38 +68,45 @@ func parseColor(token tokenizer.Token) Expr {
 	if err != nil {
 		return nil
 	}
+	var red, green, blue, transparent float64 = 0, 0, 0, 0
 	switch len(lexeme) {
 	case 4: // #RGB
-		return ColorLiteral{
-			R: float64((num>>8)&0xf) * 0x11,
-			G: float64((num>>4)&0xf) * 0x11,
-			B: float64((num>>0)&0xf) * 0x11,
-			T: 0.0,
-		}
+		red = float64((num>>8)&0xf) * 0x11
+		green = float64((num>>4)&0xf) * 0x11
+		blue = float64((num>>0)&0xf) * 0x11
+		transparent = 0.0
 	case 5: // #RGBA
-		return ColorLiteral{
-			R: float64((num>>12)&0xf) * 0x11,
-			G: float64((num>>8)&0xf) * 0x11,
-			B: float64((num>>4)&0xf) * 0x11,
-			T: 100 - float64((num>>0)&0xf)/0xf*100,
-		}
+		red = float64((num>>12)&0xf) * 0x11
+		green = float64((num>>8)&0xf) * 0x11
+		blue = float64((num>>4)&0xf) * 0x11
+		transparent = 100 - float64((num>>0)&0xf)/0xf*100
 	case 7: // #RRGGBB
-		return ColorLiteral{
-			R: float64((num >> 16) & 0xff),
-			G: float64((num >> 8) & 0xff),
-			B: float64((num >> 0) & 0xff),
-			T: 0,
-		}
+		red = float64((num >> 16) & 0xff)
+		green = float64((num >> 8) & 0xff)
+		blue = float64((num >> 0) & 0xff)
+		transparent = 0
 	case 9: // #RRGGBBAA
-		return ColorLiteral{
-			R: float64((num>>24)&0xff) / 0xff,
-			G: float64((num>>16)&0xff) / 0xff,
-			B: float64((num>>8)&0xff) / 0xff,
-			T: 100 - float64((num>>0)&0xff)/0xff*100,
-		}
+		red = float64((num>>24)&0xff) / 0xff
+		green = float64((num>>16)&0xff) / 0xff
+		blue = float64((num>>8)&0xff) / 0xff
+		transparent = 100 - float64((num>>0)&0xff)/0xff*100
 	default:
 		return nil
 	}
+	return ast.WithRange(&ast.ColorLiteral{
+		R: red,
+		G: green,
+		B: blue,
+		T: transparent,
+	}, token.Begin, token.End)
+}
+
+func pickLexeme(token *tokenizer.Token) *string {
+	if token == nil {
+		return nil
+	}
+
+	return &token.Lexeme
 }
 
 type ParseError struct {
@@ -211,8 +219,8 @@ func (p *parser) error(format string, args ...any) {
 		})
 	} else {
 		p.errors = append(p.errors, ParseError{
-			Row: token.Row,
-			Col: token.Col,
+			Row: token.Begin.Row,
+			Col: token.Begin.Column,
 			Msg: msg,
 		})
 	}
@@ -227,7 +235,7 @@ func (p *parser) getIdentifier() *tokenizer.Token {
 	return token
 }
 
-func (p *parser) parseType(silent bool) Type {
+func (p *parser) parseType(silent bool) ast.Node {
 	name := p.getIdentifier()
 	if name == nil {
 		if !silent {
@@ -235,8 +243,8 @@ func (p *parser) parseType(silent bool) Type {
 		}
 		return nil
 	}
-	var t Type = SimpleType{
-		Name: *name,
+	var t ast.Node = &ast.SimpleType{
+		Name: name.Lexeme,
 	}
 
 	for {
@@ -250,16 +258,17 @@ func (p *parser) parseType(silent bool) Type {
 			if types == nil {
 				return nil
 			}
-			if p.consume(tokenizer.RIGHT_ANG_BRACKET) == nil {
+			rang := p.consume(tokenizer.RIGHT_ANG_BRACKET)
+			if rang == nil {
 				if !silent {
 					p.error(`Expect ">" to match "<", but got %s`, p.peekLexeme())
 				}
 				return nil
 			}
-			t = GenericType{
+			t = ast.WithRange(&ast.GenericType{
 				Name: t,
 				Args: types,
-			}
+			}, t.Begin(), rang.End)
 		case tokenizer.DOT:
 			name := p.getIdentifier()
 			if name == nil {
@@ -268,35 +277,33 @@ func (p *parser) parseType(silent bool) Type {
 				}
 				return nil
 			}
-			t = SubType{
+			t = ast.WithRange(&ast.SubType{
 				Name:   t,
-				Member: *name,
-			}
+				Member: name.Lexeme,
+			}, t.Begin(), name.End)
 		case tokenizer.LEFT_SQ_BRACKET:
 			// type[] => array<type>
-			if p.consume(tokenizer.RIGHT_SQ_BRACKET) == nil {
+			rsq := p.consume(tokenizer.RIGHT_SQ_BRACKET)
+			if rsq == nil {
 				if !silent {
 					p.error(`Expect "]" to match "[", but got %s`, p.peekLexeme())
 				}
 				return nil
 			}
-			t = GenericType{
-				Name: SimpleType{
-					Name: tokenizer.Token{
-						Type:   tokenizer.IDENTIFIER,
-						Lexeme: "array",
-					},
+			t = ast.WithRange(&ast.GenericType{
+				Name: &ast.SimpleType{
+					Name: "array",
 				},
-				Args: []Type{t},
-			}
+				Args: []ast.Node{t},
+			}, t.Begin(), rsq.End)
 		}
 	}
 
 	return t
 }
 
-func (p *parser) parseTypeArgList(silent bool) []Type {
-	typeArgs := []Type{}
+func (p *parser) parseTypeArgList(silent bool) []ast.Node {
+	typeArgs := []ast.Node{}
 	for {
 		tt := p.peekType(0)
 		if tt == tokenizer.UNKNOWN || tt == tokenizer.RIGHT_ANG_BRACKET || tt == tokenizer.NEWLINE {
@@ -314,15 +321,16 @@ func (p *parser) parseTypeArgList(silent bool) []Type {
 	return typeArgs
 }
 
-func (p *parser) parseTupleAtom(silent bool) Expr {
-	if p.consume(tokenizer.LEFT_SQ_BRACKET) == nil {
+func (p *parser) parseTupleAtom(silent bool) ast.Node {
+	lsq := p.consume(tokenizer.LEFT_SQ_BRACKET)
+	if lsq == nil {
 		if !silent {
 			p.error(`Expect "[", but got %s`, p.peekLexeme())
 		}
 		return nil
 	}
-	items := TupleExpr{
-		Items: []Expr{},
+	items := &ast.TupleExpr{
+		Items: []ast.Node{},
 	}
 
 	for {
@@ -341,37 +349,42 @@ func (p *parser) parseTupleAtom(silent bool) Expr {
 		}
 	}
 
-	if p.consume(tokenizer.RIGHT_SQ_BRACKET) == nil {
+	rsq := p.consume(tokenizer.RIGHT_SQ_BRACKET)
+	if rsq == nil {
 		if !silent {
 			p.error(`Expect "]" to match "[", but got %s`, p.peekLexeme())
 		}
 		return nil
 	}
 
-	return items
+	return ast.WithRange(items, lsq.Begin, rsq.End)
 }
 
-func (p *parser) parseParenExpr(silent bool) Expr {
-	if p.consume(tokenizer.LEFT_PAREN) == nil {
+func (p *parser) parseParenExpr(silent bool) ast.Node {
+	lparen := p.consume(tokenizer.LEFT_PAREN)
+	if lparen == nil {
 		if !silent {
 			p.error(`Expect "(", but got %s`, p.peekLexeme())
 		}
 		return nil
 	}
+
 	expr := p.parseTestExpr(silent)
 	if expr == nil {
 		return nil
 	}
-	if p.consume(tokenizer.RIGHT_PAREN) == nil {
+
+	rparen := p.consume(tokenizer.RIGHT_PAREN)
+	if rparen == nil {
 		if !silent {
 			p.error(`Expect ")" to match "(", but got %s`, p.peekLexeme())
 		}
 	}
 
-	return expr
+	return ast.WithRange(expr, lparen.Begin, rparen.End)
 }
 
-func (p *parser) parseAtom(silent bool) Expr {
+func (p *parser) parseAtom(silent bool) ast.Node {
 	token := p.peek(0)
 	if token == nil {
 		if !silent {
@@ -397,14 +410,19 @@ func (p *parser) parseAtom(silent bool) Expr {
 		p.consume(tokenizer.STRING)
 		return str
 	case tokenizer.COLOR:
+		color := parseColor(*token)
+		if color == nil {
+			p.error(`Invalid color literal %s`, p.peekLexeme())
+			return nil
+		}
 		p.consume(tokenizer.COLOR)
-		return parseColor(*token)
+		return nil
 	case tokenizer.TRUE:
 		p.consume(tokenizer.TRUE)
-		return TrueExpr{}
+		return ast.WithRange(&ast.TrueExpr{}, token.Begin, token.End)
 	case tokenizer.FALSE:
 		p.consume(tokenizer.FALSE)
-		return FalseExpr{}
+		return ast.WithRange(&ast.FalseExpr{}, token.Begin, token.End)
 	case tokenizer.LEFT_PAREN:
 		return p.parseParenExpr(silent)
 	case tokenizer.LEFT_SQ_BRACKET:
@@ -412,9 +430,9 @@ func (p *parser) parseAtom(silent bool) Expr {
 	default:
 		id := p.getIdentifier()
 		if id != nil {
-			return Identifier{
-				Name: *id,
-			}
+			return ast.WithRange(&ast.Identifier{
+				Name: id.Lexeme,
+			}, id.Begin, id.End)
 		}
 	}
 
@@ -425,32 +443,31 @@ func (p *parser) parseAtom(silent bool) Expr {
 	return nil
 }
 
-func (p *parser) parseArgument(silent bool) Expr {
+func (p *parser) parseArgument(silent bool) ast.Node {
 	value := p.parseTestExpr(silent)
 	if value == nil {
 		return nil
 	}
-	if p.consume(tokenizer.EQUAL) != nil {
-		name := value
-		value = p.parseTestExpr(silent)
-		if value == nil {
-			return nil
-		}
-		switch n := name.(type) {
-		case Identifier:
-			return KwArg{
-				Name:  n.Name,
-				Value: value,
-			}
-		default:
-			return nil
-		}
+	if p.consume(tokenizer.EQUAL) == nil {
+		return value
 	}
-	return value
+	name := value
+	value = p.parseTestExpr(silent)
+	if value == nil {
+		return nil
+	}
+	if n, ok := name.(*ast.Identifier); ok {
+		return ast.WithRange(&ast.KwArg{
+			Name:  n.Name,
+			Value: value,
+		}, n.Begin(), value.End())
+	} else {
+		return nil
+	}
 }
 
-func (p *parser) parseArgList(silent bool) []Expr {
-	args := []Expr{}
+func (p *parser) parseArgList(silent bool) []ast.Node {
+	args := []ast.Node{}
 	for {
 		token := p.peek(0)
 		if token == nil || token.Type == tokenizer.RIGHT_PAREN || token.Type == tokenizer.NEWLINE {
@@ -469,7 +486,7 @@ func (p *parser) parseArgList(silent bool) []Expr {
 	return args
 }
 
-func (p *parser) parseAtomExpr(silent bool) Expr {
+func (p *parser) parseAtomExpr(silent bool) ast.Node {
 	atom := p.parseAtom(silent)
 	if atom == nil {
 		return nil
@@ -480,16 +497,17 @@ func (p *parser) parseAtomExpr(silent bool) Expr {
 			if args == nil {
 				return nil
 			}
-			if p.consume(tokenizer.RIGHT_PAREN) == nil {
+			rparen := p.consume(tokenizer.RIGHT_PAREN)
+			if rparen == nil {
 				if !silent {
 					p.error(`Expect ")" to match "(", but got %s`, p.peekLexeme())
 				}
 				return nil
 			}
-			atom = CallExpr{
+			atom = ast.WithRange(&ast.CallExpr{
 				Func: atom,
 				Args: args,
-			}
+			}, atom.Begin(), rparen.End)
 		} else if p.consume(tokenizer.LEFT_SQ_BRACKET) != nil {
 			offset := p.parseTestExpr(silent)
 			if offset == nil {
@@ -508,11 +526,11 @@ func (p *parser) parseAtomExpr(silent bool) Expr {
 				p.seek(begin - 1)
 				return atom
 			}
-			p.consume(tokenizer.RIGHT_ANG_BRACKET)
-			atom = InstantiationExpr{
+			rang := p.consume(tokenizer.RIGHT_ANG_BRACKET)
+			atom = ast.WithRange(&ast.InstantiationExpr{
 				Template: atom,
 				TypeArgs: typeArgs,
-			}
+			}, atom.Begin(), rang.End)
 		} else if p.consume(tokenizer.DOT) != nil {
 			member := p.getIdentifier()
 			if member == nil {
@@ -521,10 +539,10 @@ func (p *parser) parseAtomExpr(silent bool) Expr {
 				}
 				return nil
 			}
-			atom = AttrExpr{
+			atom = ast.WithRange(&ast.AttrExpr{
 				Target: atom,
-				Name:   *member,
-			}
+				Name:   member.Lexeme,
+			}, atom.Begin(), member.End)
 		} else {
 			break
 		}
@@ -533,17 +551,17 @@ func (p *parser) parseAtomExpr(silent bool) Expr {
 	return atom
 }
 
-func (p *parser) parseArithmeticFactor(silent bool) Expr {
+func (p *parser) parseArithmeticFactor(silent bool) ast.Node {
 	op := p.consume(tokenizer.PLUS, tokenizer.MINUS)
 	if op != nil {
 		expr := p.parseArithmeticFactor(silent)
 		if expr == nil {
 			return nil
 		}
-		return UnaryExpr{
-			Op:   *op,
+		return ast.WithRange(&ast.UnaryExpr{
+			Op:   op.Lexeme,
 			Expr: expr,
-		}
+		}, op.Begin, expr.End())
 	}
 	expr := p.parseAtomExpr(silent)
 	if expr == nil {
@@ -552,7 +570,7 @@ func (p *parser) parseArithmeticFactor(silent bool) Expr {
 	return expr
 }
 
-func (p *parser) parseArithmeticTerm(silent bool) Expr {
+func (p *parser) parseArithmeticTerm(silent bool) ast.Node {
 	left := p.parseArithmeticFactor(silent)
 	if left == nil {
 		return nil
@@ -566,16 +584,16 @@ func (p *parser) parseArithmeticTerm(silent bool) Expr {
 		if right == nil {
 			return nil
 		}
-		left = BinaryExpr{
+		left = ast.WithRange(&ast.BinaryExpr{
 			Left:  left,
-			Op:    *op,
+			Op:    op.Lexeme,
 			Right: right,
-		}
+		}, left.Begin(), right.End())
 	}
 	return left
 }
 
-func (p *parser) parseArithmeticExpr(silent bool) Expr {
+func (p *parser) parseArithmeticExpr(silent bool) ast.Node {
 	left := p.parseArithmeticTerm(silent)
 	if left == nil {
 		return nil
@@ -589,16 +607,16 @@ func (p *parser) parseArithmeticExpr(silent bool) Expr {
 		if right == nil {
 			return nil
 		}
-		left = BinaryExpr{
+		left = ast.WithRange(&ast.BinaryExpr{
 			Left:  left,
-			Op:    *op,
+			Op:    op.Lexeme,
 			Right: right,
-		}
+		}, left.Begin(), right.End())
 	}
 	return left
 }
 
-func (p *parser) parseComparison(silent bool) Expr {
+func (p *parser) parseComparison(silent bool) ast.Node {
 	left := p.parseArithmeticExpr(silent)
 	if left == nil {
 		return nil
@@ -612,16 +630,16 @@ func (p *parser) parseComparison(silent bool) Expr {
 		if right == nil {
 			return nil
 		}
-		left = BinaryExpr{
+		left = ast.WithRange(&ast.BinaryExpr{
 			Left:  left,
-			Op:    *op,
+			Op:    op.Lexeme,
 			Right: right,
-		}
+		}, left.Begin(), right.End())
 	}
 	return left
 }
 
-func (p *parser) parseNotTest(silent bool) Expr {
+func (p *parser) parseNotTest(silent bool) ast.Node {
 	not := p.consume(tokenizer.NOT)
 	if not == nil {
 		return p.parseComparison(silent)
@@ -630,13 +648,13 @@ func (p *parser) parseNotTest(silent bool) Expr {
 	if notExpr == nil {
 		return nil
 	}
-	return UnaryExpr{
-		Op:   *not,
+	return ast.WithRange(&ast.UnaryExpr{
+		Op:   not.Lexeme,
 		Expr: notExpr,
-	}
+	}, not.Begin, notExpr.End())
 }
 
-func (p *parser) parseAndTest(silent bool) Expr {
+func (p *parser) parseAndTest(silent bool) ast.Node {
 	left := p.parseNotTest(silent)
 	if left == nil {
 		return nil
@@ -650,16 +668,16 @@ func (p *parser) parseAndTest(silent bool) Expr {
 		if right == nil {
 			return nil
 		}
-		left = BinaryExpr{
+		left = ast.WithRange(&ast.BinaryExpr{
 			Left:  left,
-			Op:    *and,
+			Op:    and.Lexeme,
 			Right: right,
-		}
+		}, left.Begin(), right.End())
 	}
 	return left
 }
 
-func (p *parser) parseOrTest(silent bool) Expr {
+func (p *parser) parseOrTest(silent bool) ast.Node {
 	left := p.parseAndTest(silent)
 	if left == nil {
 		return nil
@@ -673,16 +691,16 @@ func (p *parser) parseOrTest(silent bool) Expr {
 		if right == nil {
 			return nil
 		}
-		left = BinaryExpr{
+		left = ast.WithRange(&ast.BinaryExpr{
 			Left:  left,
-			Op:    *or,
+			Op:    or.Lexeme,
 			Right: right,
-		}
+		}, left.Begin(), right.End())
 	}
 	return left
 }
 
-func (p *parser) parseTestExpr(silent bool) Expr {
+func (p *parser) parseTestExpr(silent bool) ast.Node {
 	test := p.parseOrTest(silent)
 	if test == nil {
 		return nil
@@ -704,15 +722,16 @@ func (p *parser) parseTestExpr(silent bool) Expr {
 	if f == nil {
 		return nil
 	}
-	return TernaryExpr{
+	return ast.WithRange(&ast.TernaryExpr{
 		Test:  test,
 		True:  t,
 		False: f,
-	}
+	}, test.Begin(), f.End())
 }
 
-func (p *parser) parseIfStmt() Stmt {
-	if p.consume(tokenizer.IF) == nil {
+func (p *parser) parseIfStmt() ast.Node {
+	ifToken := p.consume(tokenizer.IF)
+	if ifToken == nil {
 		p.error(`Expect "if", but got %s`, p.peekLexeme())
 		return nil
 	}
@@ -727,10 +746,12 @@ func (p *parser) parseIfStmt() Stmt {
 		return nil
 	}
 
-	ifStmt := IfStmt{
+	ifStmt := &ast.IfStmt{
 		Test: test,
 		True: suite,
 	}
+
+	ifStmt.SetBegin(ifToken.Begin)
 
 	if p.consume(tokenizer.ELSE) != nil {
 		f := p.parseSuite()
@@ -738,13 +759,15 @@ func (p *parser) parseIfStmt() Stmt {
 			return nil
 		}
 		ifStmt.False = f
+		ifStmt.SetEnd(f.End())
 	}
 
 	return ifStmt
 }
 
-func (p *parser) parseWhileStmt() Stmt {
-	if p.consume(tokenizer.WHILE) == nil {
+func (p *parser) parseWhileStmt() ast.Node {
+	w := p.consume(tokenizer.WHILE)
+	if w == nil {
 		p.error(`Expect "while", but got %s`, p.peekLexeme())
 		return nil
 	}
@@ -757,14 +780,15 @@ func (p *parser) parseWhileStmt() Stmt {
 	if suite == nil {
 		return nil
 	}
-	return WhileStmt{
+	return ast.WithRange(&ast.WhileStmt{
 		Test: test,
 		Body: suite,
-	}
+	}, w.Begin, suite.End())
 }
 
-func (p *parser) parseForStmt() Stmt {
-	if p.consume(tokenizer.FOR) == nil {
+func (p *parser) parseForStmt() ast.Node {
+	f := p.consume(tokenizer.FOR)
+	if f == nil {
 		p.error(`Expect "for", but got %s`, p.peekLexeme())
 		return nil
 	}
@@ -808,12 +832,12 @@ func (p *parser) parseForStmt() Stmt {
 			return nil
 		}
 
-		return ForInStmt{
-			Index:     *idx,
-			Iterator:  *iter,
+		return ast.WithRange(&ast.ForInStmt{
+			Index:     &idx.Lexeme,
+			Iterator:  iter.Lexeme,
 			Container: container,
 			Body:      suite,
-		}
+		}, f.Begin, suite.End())
 	}
 
 	counter := p.getIdentifier()
@@ -836,7 +860,7 @@ func (p *parser) parseForStmt() Stmt {
 			return nil
 		}
 
-		var step Expr = nil
+		var step ast.Node = nil
 		if p.consume(tokenizer.BY) != nil {
 			step = p.parseTestExpr(false)
 			if step == nil {
@@ -849,13 +873,13 @@ func (p *parser) parseForStmt() Stmt {
 			return nil
 		}
 
-		return ForStmt{
-			Counter: *counter,
+		return ast.WithRange(&ast.ForStmt{
+			Counter: counter.Lexeme,
 			Init:    init,
 			Step:    step,
 			Final:   final,
 			Body:    suite,
-		}
+		}, f.Begin, suite.End())
 	} else if p.consume(tokenizer.IN) != nil {
 		container := p.parseTestExpr(false)
 		if container == nil {
@@ -867,18 +891,19 @@ func (p *parser) parseForStmt() Stmt {
 			return nil
 		}
 
-		return ForInStmt{
-			Iterator:  *counter,
+		return ast.WithRange(&ast.ForInStmt{
+			Index:     nil,
+			Iterator:  counter.Lexeme,
 			Container: container,
 			Body:      suite,
-		}
+		}, f.Begin, suite.End())
 	}
 
 	p.error(`Expect "in" or "=", but got %s`, p.peekLexeme())
 	return nil
 }
 
-func (p *parser) parseCaseClause() Stmt {
+func (p *parser) parseCaseClause() ast.Node {
 	if p.consume(tokenizer.RIGHT_FAT_ARROW) != nil {
 		return p.parseSuite()
 	}
@@ -898,19 +923,20 @@ func (p *parser) parseCaseClause() Stmt {
 		return nil
 	}
 
-	return CaseClause{
+	return ast.WithRange(&ast.CaseClause{
 		Cond: cond,
 		Body: body,
-	}
+	}, cond.Begin(), body.End())
 }
 
-func (p *parser) parseSwitchStmt() Stmt {
-	if p.consume(tokenizer.SWITCH) == nil {
+func (p *parser) parseSwitchStmt() ast.Node {
+	sw := p.consume(tokenizer.SWITCH)
+	if sw == nil {
 		p.error(`Expect "switch", but got %s`, p.peekLexeme())
 		return nil
 	}
 
-	var target Expr = nil
+	var target ast.Node = nil
 
 	if p.peekType(0) != tokenizer.INDENT {
 		target = p.parseTestExpr(false)
@@ -924,11 +950,12 @@ func (p *parser) parseSwitchStmt() Stmt {
 		return nil
 	}
 
-	switchStmt := SwitchStmt{
+	switchStmt := &ast.SwitchStmt{
 		Target:  target,
-		Cases:   []CaseClause{},
+		Cases:   []*ast.CaseClause{},
 		Default: nil,
 	}
+	switchStmt.SetBegin(sw.Begin)
 
 	for {
 		token := p.peek(0)
@@ -939,6 +966,7 @@ func (p *parser) parseSwitchStmt() Stmt {
 
 		if token.Type == tokenizer.DEDENT {
 			p.consume(tokenizer.DEDENT)
+			switchStmt.SetEnd(token.End)
 			break
 		}
 
@@ -948,7 +976,7 @@ func (p *parser) parseSwitchStmt() Stmt {
 		}
 
 		switch c := caseClause.(type) {
-		case CaseClause:
+		case *ast.CaseClause:
 			switchStmt.Cases = append(switchStmt.Cases, c)
 		default:
 			switchStmt.Default = c
@@ -958,7 +986,7 @@ func (p *parser) parseSwitchStmt() Stmt {
 	return switchStmt
 }
 
-func (p *parser) parseVarDeclStmt() Stmt {
+func (p *parser) parseVarDeclStmt() ast.Node {
 	declMode := p.consume(tokenizer.VARIP, tokenizer.VAR)
 	qualifier := p.consume(tokenizer.SERIES, tokenizer.CONST, tokenizer.SIMPLE)
 
@@ -973,13 +1001,20 @@ func (p *parser) parseVarDeclStmt() Stmt {
 		if init == nil {
 			return nil
 		}
-		return VarDeclStmt{
-			DeclMode:  declMode,
-			Qualifier: qualifier,
-			Type:      nil,
-			Name:      *name,
-			Initial:   init,
+		begin := name.Begin
+		if qualifier != nil {
+			begin = qualifier.Begin
 		}
+		if declMode != nil {
+			begin = declMode.Begin
+		}
+		return ast.WithRange(&ast.VarDeclStmt{
+			DeclMode:  pickLexeme(declMode),
+			Qualifier: pickLexeme(qualifier),
+			Type:      nil,
+			Name:      name.Lexeme,
+			Initial:   init,
+		}, begin, init.End())
 	}
 
 	t := p.parseType(false)
@@ -1003,13 +1038,20 @@ func (p *parser) parseVarDeclStmt() Stmt {
 		return nil
 	}
 
-	return VarDeclStmt{
-		DeclMode:  declMode,
-		Qualifier: qualifier,
-		Type:      t,
-		Name:      *name,
-		Initial:   init,
+	begin := t.Begin()
+	if qualifier != nil {
+		begin = qualifier.Begin
 	}
+	if declMode != nil {
+		begin = declMode.Begin
+	}
+	return ast.WithRange(&ast.VarDeclStmt{
+		DeclMode:  pickLexeme(declMode),
+		Qualifier: pickLexeme(qualifier),
+		Type:      t,
+		Name:      name.Lexeme,
+		Initial:   init,
+	}, begin, init.End())
 }
 
 func (p *parser) parseIdentifierTuple(silent bool) []tokenizer.Token {
@@ -1052,7 +1094,7 @@ func (p *parser) parseIdentifierTuple(silent bool) []tokenizer.Token {
 	return ids
 }
 
-func (p *parser) parseParamDecl() Stmt {
+func (p *parser) parseParamDecl() ast.Node {
 	qualifier := p.consume(tokenizer.CONST, tokenizer.SERIES, tokenizer.SIMPLE)
 	begin := p.tell()
 	name := p.getIdentifier()
@@ -1070,12 +1112,21 @@ func (p *parser) parseParamDecl() Stmt {
 				return nil
 			}
 		}
-		return ParamDecl{
-			Qualifier: qualifier,
-			Type:      nil,
-			Name:      *name,
-			Default:   def,
+		beginLoc := name.Begin
+		if qualifier != nil {
+			beginLoc = qualifier.Begin
 		}
+
+		endLoc := name.End
+		if def != nil {
+			endLoc = def.End
+		}
+		return ast.WithRange(&ast.ParamDecl{
+			Qualifier: pickLexeme(qualifier),
+			Type:      nil,
+			Name:      name.Lexeme,
+			Default:   pickLexeme(def),
+		}, beginLoc, endLoc)
 	}
 
 	p.seek(begin)
@@ -1100,21 +1151,30 @@ func (p *parser) parseParamDecl() Stmt {
 		p.consume()
 	}
 
-	return ParamDecl{
-		Qualifier: qualifier,
-		Type:      t,
-		Name:      *name,
-		Default:   def,
+	beginLoc := t.Begin()
+	if qualifier != nil {
+		beginLoc = qualifier.Begin
 	}
+
+	endLoc := name.End
+	if def != nil {
+		endLoc = def.End
+	}
+	return ast.WithRange(&ast.ParamDecl{
+		Qualifier: pickLexeme(qualifier),
+		Type:      t,
+		Name:      name.Lexeme,
+		Default:   pickLexeme(def),
+	}, beginLoc, endLoc)
 }
 
-func (p *parser) parseParamList() []ParamDecl {
+func (p *parser) parseParamList() []*ast.ParamDecl {
 	if p.consume(tokenizer.LEFT_PAREN) == nil {
 		p.error(`Expect "(", but got %s`, p.peekLexeme())
 		return nil
 	}
 
-	params := []ParamDecl{}
+	params := []*ast.ParamDecl{}
 	for {
 		tt := p.peekType(0)
 		if tt == tokenizer.UNKNOWN || tt == tokenizer.RIGHT_PAREN {
@@ -1126,10 +1186,10 @@ func (p *parser) parseParamList() []ParamDecl {
 		}
 
 		switch pd := param.(type) {
-		case ParamDecl:
+		case *ast.ParamDecl:
 			params = append(params, pd)
 		default:
-			p.error(`Unexpected error`)
+			p.error(`Unexpected error: param is %T`, param)
 			return nil
 		}
 
@@ -1146,21 +1206,23 @@ func (p *parser) parseParamList() []ParamDecl {
 	return params
 }
 
-func (p *parser) parseFuncDeclStmt() Stmt {
-	export := false
-	method := false
-	if p.consume(tokenizer.EXPORT) != nil {
-		export = true
-	}
-
-	if p.consume(tokenizer.METHOD) != nil {
-		method = true
-	}
+func (p *parser) parseFuncDeclStmt() ast.Node {
+	export := p.consume(tokenizer.EXPORT)
+	method := p.consume(tokenizer.METHOD)
 
 	name := p.getIdentifier()
 	if name == nil {
 		p.error(`Expect an identifier as function name, but got %s`, p.peekLexeme())
 		return nil
+	}
+
+	beginLoc := name.Begin
+	if method != nil {
+		beginLoc = method.Begin
+	}
+
+	if export != nil {
+		beginLoc = export.Begin
 	}
 
 	params := p.parseParamList()
@@ -1178,16 +1240,16 @@ func (p *parser) parseFuncDeclStmt() Stmt {
 		return nil
 	}
 
-	return FuncDeclStmt{
-		Export: export,
-		Method: method,
-		Name:   *name,
+	return ast.WithRange(&ast.FuncDeclStmt{
+		Export: export != nil,
+		Method: method != nil,
+		Name:   name.Lexeme,
 		Params: params,
 		Body:   body,
-	}
+	}, beginLoc, body.End())
 }
 
-func (p *parser) parseMemberDecl() Stmt {
+func (p *parser) parseMemberDecl() ast.Node {
 	begin := p.tell()
 	name := p.getIdentifier()
 	if name == nil {
@@ -1205,11 +1267,15 @@ func (p *parser) parseMemberDecl() Stmt {
 			}
 			p.consume()
 		}
-		return MemberDecl{
-			Type:    nil,
-			Name:    *name,
-			Default: def,
+		endLoc := name.End
+		if def != nil {
+			endLoc = def.End
 		}
+		return ast.WithRange(&ast.MemberDecl{
+			Type:    nil,
+			Name:    name.Lexeme,
+			Default: pickLexeme(def),
+		}, name.Begin, endLoc)
 	}
 
 	p.seek(begin)
@@ -1234,15 +1300,20 @@ func (p *parser) parseMemberDecl() Stmt {
 		p.consume()
 	}
 
-	return MemberDecl{
-		Type:    t,
-		Name:    *name,
-		Default: def,
+	endLoc := name.End
+	if def != nil {
+		endLoc = def.End
 	}
+	return ast.WithRange(&ast.MemberDecl{
+		Type:    t,
+		Name:    name.Lexeme,
+		Default: pickLexeme(def),
+	}, t.Begin(), endLoc)
 }
 
-func (p *parser) parseTypeDeclStmt() Stmt {
-	if p.consume(tokenizer.TYPE) == nil {
+func (p *parser) parseTypeDeclStmt() ast.Node {
+	typeToken := p.consume(tokenizer.TYPE)
+	if typeToken == nil {
 		p.error(`Expect "type", but got %s`, p.peekLexeme())
 		return nil
 	}
@@ -1258,11 +1329,13 @@ func (p *parser) parseTypeDeclStmt() Stmt {
 		return nil
 	}
 
-	members := []MemberDecl{}
+	endLoc := name.End
+	members := []*ast.MemberDecl{}
 	for {
 		token := p.peek(0)
 		if token != nil && token.Type == tokenizer.DEDENT {
 			p.consume(tokenizer.DEDENT)
+			endLoc = token.End
 			break
 		}
 
@@ -1271,7 +1344,7 @@ func (p *parser) parseTypeDeclStmt() Stmt {
 			return nil
 		}
 
-		md, ok := member.(MemberDecl)
+		md, ok := member.(*ast.MemberDecl)
 		if !ok {
 			p.error(`Unexpected error: Stmt to MemberDecl failed`)
 			return nil
@@ -1281,18 +1354,18 @@ func (p *parser) parseTypeDeclStmt() Stmt {
 		p.consume(tokenizer.NEWLINE)
 	}
 
-	return TypeDeclStmt{
-		Name:    *name,
+	return ast.WithRange(&ast.TypeDeclStmt{
+		Name:    name.Lexeme,
 		Members: members,
-	}
+	}, typeToken.Begin, endLoc)
 }
 
-func (p *parser) parseReassignStmt() Stmt {
+func (p *parser) parseReassignStmt() ast.Node {
 	println("reassign")
 	lhs := p.parseAtomExpr(false)
 	switch lhs.(type) {
-	case Identifier:
-	case AttrExpr:
+	case *ast.Identifier:
+	case *ast.AttrExpr:
 	default:
 		p.error(`Only identifiers or attributes can be reassigned`)
 		return nil
@@ -1313,15 +1386,16 @@ func (p *parser) parseReassignStmt() Stmt {
 		return nil
 	}
 
-	return ReassignStmt{
+	return ast.WithRange(&ast.ReassignStmt{
 		Target: lhs,
-		Op:     *op,
+		Op:     op.Lexeme,
 		Value:  rhs,
-	}
+	}, lhs.Begin(), rhs.End())
 }
 
-func (p *parser) parseImportStmt() Stmt {
-	if p.consume(tokenizer.IMPORT) == nil {
+func (p *parser) parseImportStmt() ast.Node {
+	importToken := p.consume(tokenizer.IMPORT)
+	if importToken == nil {
 		p.error(`Expect "import", but got %s`, p.peekLexeme())
 		return nil
 	}
@@ -1354,6 +1428,8 @@ func (p *parser) parseImportStmt() Stmt {
 		return nil
 	}
 
+	endLoc := version.End
+
 	var alias *tokenizer.Token = nil
 	if p.consume(tokenizer.AS) != nil {
 		alias = p.getIdentifier()
@@ -1361,24 +1437,26 @@ func (p *parser) parseImportStmt() Stmt {
 			p.error(`Expect an identifier as alias of library, but got %s`, p.peekLexeme())
 			return nil
 		}
+		endLoc = alias.End
 	}
 
-	return ImportStmt{
-		User:    *user,
-		Name:    *name,
-		Version: *version,
-		Alias:   alias,
-	}
+	return ast.WithRange(&ast.ImportStmt{
+		User:    user.Lexeme,
+		Name:    name.Lexeme,
+		Version: version.Lexeme,
+		Alias:   pickLexeme(alias),
+	}, importToken.Begin, endLoc)
 }
 
-func (p *parser) parseStmt() Stmt {
-	switch p.peekType(0) {
+func (p *parser) parseStmt() ast.Node {
+	tkn := p.peek(0)
+	switch tkn.Type {
 	case tokenizer.BREAK:
 		p.consume(tokenizer.BREAK)
-		return BreakStmt{}
+		return ast.WithRange(&ast.BreakStmt{}, tkn.Begin, tkn.End)
 	case tokenizer.CONTINUE:
 		p.consume(tokenizer.CONTINUE)
-		return ContinueStmt{}
+		return ast.WithRange(&ast.ContinueStmt{}, tkn.Begin, tkn.End)
 	case tokenizer.IMPORT:
 		return p.parseImportStmt()
 	case tokenizer.IF:
@@ -1424,9 +1502,9 @@ func (p *parser) parseStmt() Stmt {
 			}
 			typeSatisfy := false
 			switch lhs.(type) {
-			case Identifier:
+			case *ast.Identifier:
 				typeSatisfy = true
-			case AttrExpr:
+			case *ast.AttrExpr:
 				typeSatisfy = true
 			}
 			if typeSatisfy {
@@ -1450,9 +1528,9 @@ func (p *parser) parseStmt() Stmt {
 				}
 			}
 			p.seek(afterExpr)
-			return ExprStmt{
+			return ast.WithRange(&ast.ExprStmt{
 				Expr: lhs,
-			}
+			}, lhs.Begin(), lhs.End())
 		}
 	case tokenizer.LEFT_SQ_BRACKET:
 		begin := p.tell()
@@ -1463,31 +1541,35 @@ func (p *parser) parseStmt() Stmt {
 			if expr == nil {
 				return nil
 			}
-			return ExprStmt{
+			return ast.WithRange(&ast.ExprStmt{
 				Expr: expr,
-			}
+			}, expr.Begin(), expr.End())
 		}
 		init := p.parseStmt()
 		if init == nil {
 			return nil
 		}
-		return TupleDeclStmt{
-			Variables: ids,
-			Initial:   init,
+		idNames := []string{}
+		for _, v := range ids {
+			idNames = append(idNames, v.Lexeme)
 		}
+		return ast.WithRange(&ast.TupleDeclStmt{
+			Variables: idNames,
+			Initial:   init,
+		}, tkn.Begin, init.End())
 	default:
 		expr := p.parseTestExpr(false)
 		if expr == nil {
 			return nil
 		}
-		return ExprStmt{
+		return ast.WithRange(&ast.ExprStmt{
 			Expr: expr,
-		}
+		}, expr.Begin(), expr.End())
 	}
 }
 
-func (p *parser) parseStmtGroup() Stmt {
-	stmts := []Stmt{}
+func (p *parser) parseStmtGroup() ast.Node {
+	stmts := []ast.Node{}
 	for {
 		stmt := p.parseStmt()
 		if stmt == nil {
@@ -1502,13 +1584,14 @@ func (p *parser) parseStmtGroup() Stmt {
 		return stmts[0]
 	}
 
-	return Suite{
+	return ast.WithRange(&ast.Suite{
 		Body: stmts,
-	}
+	}, stmts[0].Begin(), stmts[len(stmts)-1].End())
 }
 
-func (p *parser) parseSuite() Stmt {
-	if p.consume(tokenizer.INDENT) == nil {
+func (p *parser) parseSuite() ast.Node {
+	indent := p.consume(tokenizer.INDENT)
+	if indent == nil {
 		// single statement
 		stmt := p.parseStmtGroup()
 		if stmt == nil {
@@ -1517,11 +1600,14 @@ func (p *parser) parseSuite() Stmt {
 		return stmt
 	}
 
-	stmts := []Stmt{}
+	suite := &ast.Suite{
+		Body: []ast.Node{},
+	}
+	suite.SetBegin(indent.Begin)
 	for {
-		token := p.peek(0)
-		if token != nil && token.Type == tokenizer.DEDENT {
-			p.consume(tokenizer.DEDENT)
+		dedent := p.consume(tokenizer.DEDENT)
+		if dedent != nil {
+			suite.SetEnd(dedent.End)
 			break
 		}
 
@@ -1530,27 +1616,25 @@ func (p *parser) parseSuite() Stmt {
 			return nil
 		}
 
-		stmts = append(stmts, ss)
+		suite.Body = append(suite.Body, ss)
 		p.consume(tokenizer.NEWLINE)
 	}
 
-	if len(stmts) == 1 {
-		return stmts[0]
+	if len(suite.Body) == 1 {
+		return suite.Body[0]
 	}
 
-	return Suite{
-		Body: stmts,
-	}
+	return suite
 }
 
-func Parse(tokens []tokenizer.Token) ([]Stmt, []ParseError) {
+func Parse(tokens []tokenizer.Token) ([]ast.Node, []ParseError) {
 	p := parser{
 		tokens:  tokens,
 		current: 0,
 		errors:  []ParseError{},
 	}
 
-	stmts := []Stmt{}
+	stmts := []ast.Node{}
 	for !p.eof() {
 		stmt := p.parseStmtGroup()
 		if stmt == nil {
