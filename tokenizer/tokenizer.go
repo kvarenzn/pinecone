@@ -168,9 +168,7 @@ func (t *tokenizer) scanIndent() {
 			}
 			t.setCurrentIndent(indent)
 			return
-		case '\r':
-			fallthrough
-		case '\n':
+		case '\r', '\n':
 			return
 		default:
 			t.setCurrentIndent(indent)
@@ -331,17 +329,11 @@ func (t *tokenizer) scanToken() {
 		} else {
 			t.record(PERCENT)
 		}
-	case '\'':
-		fallthrough
-	case '"':
+	case '\'', '"':
 		t.scanString()
-	case ' ':
-		fallthrough
-	case '\t':
+	case ' ', '\t':
 		return
-	case '\r':
-		fallthrough
-	case '\n':
+	case '\r', '\n':
 		t.scanIndent()
 	case '#':
 		t.scanColor()

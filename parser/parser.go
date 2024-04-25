@@ -1183,13 +1183,12 @@ func (p *parser) parseParamList() []*ast.ParamDecl {
 			return nil
 		}
 
-		switch pd := param.(type) {
-		case *ast.ParamDecl:
-			params = append(params, pd)
-		default:
+		pd, ok := param.(*ast.ParamDecl)
+		if !ok {
 			p.error(`Unexpected error: param is %T`, param)
 			return nil
 		}
+		params = append(params, pd)
 
 		if p.consume(tokenizer.COMMA) == nil {
 			break
@@ -1362,8 +1361,7 @@ func (p *parser) parseReassignStmt() ast.Node {
 	println("reassign")
 	lhs := p.parseAtomExpr(false)
 	switch lhs.(type) {
-	case *ast.Identifier:
-	case *ast.AttrExpr:
+	case *ast.Identifier, *ast.AttrExpr:
 	default:
 		p.error(`Only identifiers or attributes can be reassigned`)
 		return nil
@@ -1474,15 +1472,7 @@ func (p *parser) parseStmt() ast.Node {
 		return p.parseTypeDeclStmt()
 	case tokenizer.METHOD:
 		return p.parseFuncDeclStmt()
-	case tokenizer.VAR:
-		fallthrough
-	case tokenizer.VARIP:
-		fallthrough
-	case tokenizer.CONST:
-		fallthrough
-	case tokenizer.SERIES:
-		fallthrough
-	case tokenizer.SIMPLE:
+	case tokenizer.VAR, tokenizer.VARIP, tokenizer.CONST, tokenizer.SIMPLE:
 		return p.parseVarDeclStmt()
 	case tokenizer.IDENTIFIER:
 		if p.peekType(1) == tokenizer.LEFT_PAREN && p.hasTokenBeforeNewLine(tokenizer.RIGHT_FAT_ARROW) {
@@ -1500,9 +1490,7 @@ func (p *parser) parseStmt() ast.Node {
 			}
 			typeSatisfy := false
 			switch lhs.(type) {
-			case *ast.Identifier:
-				typeSatisfy = true
-			case *ast.AttrExpr:
+			case *ast.Identifier, *ast.AttrExpr:
 				typeSatisfy = true
 			}
 			if typeSatisfy {
