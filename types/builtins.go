@@ -272,6 +272,10 @@ func (f functionType) String() string {
 
 // Utilities
 func CanDoImplicitConversion(from, to Type) bool {
+	if to.Kind() == UncertainKind && from.Kind() != UncertainKind && from.Kind() != VoidKind {
+		// na can be casted to almost any types
+		return true
+	}
 	if to.Kind() == BoolKind {
 		if from.Kind() == IntKind || from.Kind() == FloatKind {
 			return true
