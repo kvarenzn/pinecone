@@ -1,6 +1,6 @@
 package tokenizer
 
-type TokenType int
+type TokenType byte
 
 const (
 	UNKNOWN TokenType = iota
