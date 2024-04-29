@@ -41,77 +41,7 @@ func (twq TypeWithQualifier) String() string {
 	return fmt.Sprintf("%s %s", twq.Qualifier.String(), twq.Type.String())
 }
 
-
-// QualifierKind()
-func (u uncertainType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (v voidType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (b boolType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (i intType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (f floatType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (b boxType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (c colorType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (p pointType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (l labelType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (l lineType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (l lineFillType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (p polyLineType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (t tableType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (m mapType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (a arrayType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (m matrixType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (s structType) QualifierKind() QualifierKind {
-	return NoQualifier
-}
-
-func (t tupleType) QualifierKind() QualifierKind {
+func (bt baseType) QualifierKind() QualifierKind {
 	return NoQualifier
 }
 
@@ -123,3 +53,38 @@ func (twq TypeWithQualifier) QualifierKind() QualifierKind {
 	return twq.Qualifier
 }
 
+func (twq TypeWithQualifier) Unit() Type {
+	return twq.Type.Unit()
+}
+
+func (twq TypeWithQualifier) Key() Type {
+	return twq.Type.Key()
+}
+
+func (twq TypeWithQualifier) Value() Type {
+	return twq.Type.Value()
+}
+
+func (twq TypeWithQualifier) Count() int {
+	return twq.Type.Count()
+}
+
+func (twq TypeWithQualifier) Fields() []TypeWithName {
+	return twq.Type.Fields()
+}
+
+func (twq TypeWithQualifier) Field(i int) TypeWithName {
+	return twq.Type.Field(i)
+}
+
+func (twq TypeWithQualifier) FieldByName(name string) *TypeWithName {
+	return twq.Type.FieldByName(name)
+}
+
+func (twq TypeWithQualifier) Items() []Type {
+	return twq.Type.Items()
+}
+
+func (twq TypeWithQualifier) Item(i int) Type {
+	return twq.Type.Item(i)
+}

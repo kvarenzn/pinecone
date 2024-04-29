@@ -1,48 +1,48 @@
 package ast
 
-import "github.com/kvarenzn/pinecone/structs"
+import "github.com/kvarenzn/pinecone/metainfo"
 
 type Node interface {
-	Range() (structs.Location, structs.Location)
-	SetRange(structs.Location, structs.Location)
-	Begin() structs.Location
-	SetBegin(structs.Location)
-	End() structs.Location
-	SetEnd(structs.Location)
+	Range() (metainfo.Location, metainfo.Location)
+	SetRange(metainfo.Location, metainfo.Location)
+	Begin() metainfo.Location
+	SetBegin(metainfo.Location)
+	End() metainfo.Location
+	SetEnd(metainfo.Location)
 }
 
 type node struct {
-	begin structs.Location
-	end   structs.Location
+	begin metainfo.Location
+	end   metainfo.Location
 }
 
-func (n *node) Range() (structs.Location, structs.Location) {
+func (n *node) Range() (metainfo.Location, metainfo.Location) {
 	return n.begin, n.end
 }
 
-func WithRange(node Node, begin, end structs.Location) Node {
+func WithRange(node Node, begin, end metainfo.Location) Node {
 	node.SetRange(begin, end)
 	return node
 }
 
-func (n *node) SetRange(begin, end structs.Location) {
+func (n *node) SetRange(begin, end metainfo.Location) {
 	n.begin = begin
 	n.end = end
 }
 
-func (n *node) Begin() structs.Location {
+func (n *node) Begin() metainfo.Location {
 	return n.begin
 }
 
-func (n *node) SetBegin(loc structs.Location) {
+func (n *node) SetBegin(loc metainfo.Location) {
 	n.begin = loc
 }
 
-func (n *node) End() structs.Location {
+func (n *node) End() metainfo.Location {
 	return n.end
 }
 
-func (n *node) SetEnd(loc structs.Location) {
+func (n *node) SetEnd(loc metainfo.Location) {
 	n.end = loc
 }
 

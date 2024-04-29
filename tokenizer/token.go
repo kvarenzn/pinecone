@@ -3,14 +3,14 @@ package tokenizer
 import (
 	"fmt"
 
-	"github.com/kvarenzn/pinecone/structs"
+	"github.com/kvarenzn/pinecone/metainfo"
 )
 
 type Token struct {
 	Type   TokenType
 	Lexeme string
-	Begin  structs.Location
-	End    structs.Location
+	Begin  metainfo.Location
+	End    metainfo.Location
 }
 
 func (t Token) String() string {

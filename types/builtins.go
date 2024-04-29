@@ -6,40 +6,75 @@ import (
 )
 
 // / Definitions
-type uncertainType struct{}
-type voidType struct{}
-type boolType struct{}
-type intType struct{}
-type floatType struct{}
-type boxType struct{}
-type colorType struct{}
-type pointType struct{} // chart.point
-type labelType struct{}
-type lineType struct{}
-type lineFillType struct{}
-type polyLineType struct{}
-type tableType struct{}
+type baseType struct{}
+
+type uncertainType struct {
+	baseType
+}
+type voidType struct {
+	baseType
+}
+type boolType struct {
+	baseType
+}
+type intType struct {
+	baseType
+}
+type floatType struct {
+	baseType
+}
+type boxType struct {
+	baseType
+}
+type colorType struct {
+	baseType
+}
+type pointType struct { // chart.point
+	baseType
+}
+type labelType struct {
+	baseType
+}
+type lineType struct {
+	baseType
+}
+type lineFillType struct {
+	baseType
+}
+type polyLineType struct {
+	baseType
+}
+type tableType struct {
+	baseType
+}
 type mapType struct {
+	baseType
 	key   Type
 	value Type
 }
 type arrayType struct {
+	baseType
 	item Type
 }
 type matrixType struct {
+	baseType
 	unit Type
 }
 type TypeWithName struct {
-	Name string
-	Type Type
+	Name     string
+	Type     Type
+	Optional bool
 }
 type structType struct {
+	baseType
 	fields []TypeWithName
 }
 type tupleType struct {
+	baseType
 	items []Type
 }
 type functionType struct {
+	baseType
 	in  []TypeWithName
 	out Type
 }
@@ -285,4 +320,102 @@ func CanDoImplicitConversion(from, to Type) bool {
 	}
 
 	return false
+}
+
+// containers
+func (bt baseType) Unit() Type {
+	panic("not applicable")
+}
+
+func (a arrayType) Unit() Type {
+	return a.item
+}
+
+func (m matrixType) Unit() Type {
+	return m.unit
+}
+
+// map
+func (bt baseType) Key() Type {
+	panic("not applicable")
+}
+
+func (bt baseType) Value() Type {
+	panic("not applicable")
+}
+
+func (m mapType) Key() Type {
+	return m.key
+}
+
+func (m mapType) Value() Type {
+	return m.value
+}
+
+// Count()
+func (bt baseType) Count() int {
+	panic("not applicable")
+}
+
+func (st structType) Count() int {
+	return len(st.fields)
+}
+
+func (tt tupleType) Count() int {
+	return len(tt.items)
+}
+
+// structs
+func (bt baseType) Fields() []TypeWithName {
+	panic("not applicable")
+}
+
+func (bt baseType) Field(i int) TypeWithName {
+	panic("not applicable")
+}
+
+func (bt baseType) FieldByName(name string) *TypeWithName {
+	panic("not applicable")
+}
+
+func (st structType) Fields() []TypeWithName {
+	fields := []TypeWithName{}
+	for _, f := range st.fields {
+		fields = append(fields, f)
+	}
+	return fields
+}
+
+func (st structType) Field(i int) TypeWithName {
+	return st.fields[i]
+}
+
+func (st structType) FieldByName(name string) *TypeWithName {
+	for _, f := range st.fields {
+		if f.Name == name {
+			return &f
+		}
+	}
+	return nil
+}
+
+// tuple
+func (bt baseType) Items() []Type {
+	panic("not applicable")
+}
+
+func (tt tupleType) Items() []Type {
+	result := []Type{}
+	for _, i := range tt.items {
+		result = append(result, i)
+	}
+	return result
+}
+
+func (bt baseType) Item(i int) Type {
+	panic("not applicable")
+}
+
+func (tt tupleType) Item(i int) Type {
+	return tt.items[i]
 }

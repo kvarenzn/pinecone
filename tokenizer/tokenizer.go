@@ -3,7 +3,7 @@ package tokenizer
 import (
 	"fmt"
 
-	"github.com/kvarenzn/pinecone/structs"
+	"github.com/kvarenzn/pinecone/metainfo"
 )
 
 func isDecimal(r rune) bool {
@@ -95,11 +95,11 @@ func (ts tokenizer) takeAs(tt TokenType) Token {
 	return Token{
 		Type:   tt,
 		Lexeme: ts.take(),
-		Begin: structs.Location{
+		Begin: metainfo.Location{
 			Row:    ts.startRow,
 			Column: ts.startCol,
 		},
-		End: structs.Location{
+		End: metainfo.Location{
 			Row:    ts.prevRow,
 			Column: ts.prevCol,
 		},

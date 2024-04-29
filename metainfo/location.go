@@ -1,4 +1,4 @@
-package structs
+package metainfo
 
 type Location struct {
 	Column int

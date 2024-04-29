@@ -3,7 +3,8 @@ package types
 type TypeKind byte
 
 const (
-	UncertainKind TypeKind = iota
+	NotApplicableKind TypeKind = iota
+	UncertainKind
 	VoidKind
 	BoolKind
 	IntKind
@@ -16,6 +17,9 @@ const (
 	LineFillKind
 	PolyLineKind
 	TableKind
+	maxPrimitiveType
+
+	// type with parameters
 	ArrayKind
 	MatrixKind
 	MapKind
@@ -28,4 +32,12 @@ const (
 
 func (tk TypeKind) IsValid() bool {
 	return tk > UncertainKind && tk < maxTypeKind
+}
+
+func (tk TypeKind) IsNormal() bool {
+	return tk > VoidKind && tk < FunctionKind
+}
+
+func (tk TypeKind) IsPrimitiveType() bool {
+	return tk > UncertainKind && tk < maxPrimitiveType
 }
