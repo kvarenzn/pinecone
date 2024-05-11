@@ -31,4 +31,7 @@ type Type interface {
 	InName(name string) *TypeWithName
 	AllIn() []TypeWithName
 	Out() Type
+
+	// union
+	Members() []Type
 }

@@ -417,10 +417,14 @@ func (p *parser) parseAtom(silent bool) ast.Node {
 		return nil
 	case tokenizer.TRUE:
 		p.consume(tokenizer.TRUE)
-		return ast.WithRange(&ast.TrueExpr{}, token.Begin, token.End)
+		return ast.WithRange(&ast.BoolLiteral{
+			Value: true,
+		}, token.Begin, token.End)
 	case tokenizer.FALSE:
 		p.consume(tokenizer.FALSE)
-		return ast.WithRange(&ast.FalseExpr{}, token.Begin, token.End)
+		return ast.WithRange(&ast.BoolLiteral{
+			Value: false,
+		}, token.Begin, token.End)
 	case tokenizer.LEFT_PAREN:
 		return p.parseParenExpr(silent)
 	case tokenizer.LEFT_SQ_BRACKET:
@@ -1102,11 +1106,10 @@ func (p *parser) parseParamDecl() ast.Node {
 	}
 
 	if p.peekType(0).In(tokenizer.EQUAL, tokenizer.COMMA, tokenizer.RIGHT_PAREN) {
-		var def *tokenizer.Token = nil
+		var def ast.Node = nil
 		if p.consume(tokenizer.EQUAL) != nil {
-			def = p.peek(0)
-			if def == nil || !(def.Type == tokenizer.IDENTIFIER || def.IsSoftKeyword() || def.IsLiteral()) {
-				p.error(`Expect an identifier or a literal, but got %s`, p.peekLexeme())
+			def = p.parseAtom(false)
+			if def == nil {
 				return nil
 			}
 		}
@@ -1117,13 +1120,13 @@ func (p *parser) parseParamDecl() ast.Node {
 
 		endLoc := name.End
 		if def != nil {
-			endLoc = def.End
+			endLoc = def.End()
 		}
 		return ast.WithRange(&ast.ParamDecl{
 			Qualifier: pickLexeme(qualifier),
 			Type:      nil,
 			Name:      name.Lexeme,
-			Default:   pickLexeme(def),
+			Default:   def,
 		}, beginLoc, endLoc)
 	}
 
@@ -1139,14 +1142,12 @@ func (p *parser) parseParamDecl() ast.Node {
 		return nil
 	}
 
-	var def *tokenizer.Token = nil
+	var def ast.Node = nil
 	if p.consume(tokenizer.EQUAL) != nil {
-		def = p.peek(0)
-		if def == nil || !(def.Type == tokenizer.IDENTIFIER || def.IsSoftKeyword() || def.IsLiteral()) {
-			p.error(`Expect an identifier or a literal, but got %s`, p.peekLexeme())
+		def = p.parseAtom(false)
+		if def == nil {
 			return nil
 		}
-		p.consume()
 	}
 
 	beginLoc := t.Begin()
@@ -1156,13 +1157,13 @@ func (p *parser) parseParamDecl() ast.Node {
 
 	endLoc := name.End
 	if def != nil {
-		endLoc = def.End
+		endLoc = def.End()
 	}
 	return ast.WithRange(&ast.ParamDecl{
 		Qualifier: pickLexeme(qualifier),
 		Type:      t,
 		Name:      name.Lexeme,
-		Default:   pickLexeme(def),
+		Default:   def,
 	}, beginLoc, endLoc)
 }
 
@@ -1255,23 +1256,21 @@ func (p *parser) parseMemberDecl() ast.Node {
 	}
 
 	if p.peekType(0).In(tokenizer.EQUAL, tokenizer.NEWLINE, tokenizer.DEDENT) {
-		var def *tokenizer.Token = nil
+		var def ast.Node = nil
 		if p.consume(tokenizer.EQUAL) != nil {
-			def = p.peek(0)
-			if def == nil || !(def.Type == tokenizer.IDENTIFIER || def.IsSoftKeyword() || def.IsLiteral()) {
-				p.error(`Expect an identifier or a literal, but got %s`, p.peekLexeme())
+			def = p.parseAtom(false)
+			if def == nil {
 				return nil
 			}
-			p.consume()
 		}
 		endLoc := name.End
 		if def != nil {
-			endLoc = def.End
+			endLoc = def.End()
 		}
 		return ast.WithRange(&ast.MemberDecl{
 			Type:    nil,
 			Name:    name.Lexeme,
-			Default: pickLexeme(def),
+			Default: def,
 		}, name.Begin, endLoc)
 	}
 
@@ -1287,24 +1286,22 @@ func (p *parser) parseMemberDecl() ast.Node {
 		return nil
 	}
 
-	var def *tokenizer.Token = nil
+	var def ast.Node = nil
 	if p.consume(tokenizer.EQUAL) != nil {
-		def = p.peek(0)
-		if def == nil || !(def.Type == tokenizer.IDENTIFIER || def.IsSoftKeyword() || def.IsLiteral()) {
-			p.error(`Expect an identifier or a literal, but got %s`, p.peekLexeme())
+		def = p.parseAtom(false)
+		if def == nil {
 			return nil
 		}
-		p.consume()
 	}
 
 	endLoc := name.End
 	if def != nil {
-		endLoc = def.End
+		endLoc = def.End()
 	}
 	return ast.WithRange(&ast.MemberDecl{
 		Type:    t,
 		Name:    name.Lexeme,
-		Default: pickLexeme(def),
+		Default: def,
 	}, t.Begin(), endLoc)
 }
 

@@ -1,18 +1,18 @@
 package types
 
-func (bt baseType) In(i int) TypeWithName {
+func (bt BaseType) In(i int) TypeWithName {
 	panic("not applicable")
 }
 
-func (bt baseType) InName(name string) *TypeWithName {
+func (bt BaseType) InName(name string) *TypeWithName {
 	panic("not applicable")
 }
 
-func (bt baseType) AllIn() []TypeWithName {
+func (bt BaseType) AllIn() []TypeWithName {
 	panic("not applicable")
 }
 
-func (bt baseType) Out() Type {
+func (bt BaseType) Out() Type {
 	panic("not applicable")
 }
 

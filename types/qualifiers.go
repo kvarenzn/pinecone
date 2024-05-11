@@ -41,7 +41,7 @@ func (twq TypeWithQualifier) String() string {
 	return fmt.Sprintf("%s %s", twq.Qualifier.String(), twq.Type.String())
 }
 
-func (bt baseType) QualifierKind() QualifierKind {
+func (bt BaseType) QualifierKind() QualifierKind {
 	return NoQualifier
 }
 
@@ -87,4 +87,17 @@ func (twq TypeWithQualifier) Items() []Type {
 
 func (twq TypeWithQualifier) Item(i int) Type {
 	return twq.Type.Item(i)
+}
+
+func (twq TypeWithQualifier) Members() []Type {
+	return twq.Type.Members()
+}
+
+func Peel(t Type) Type {
+	twq, ok := t.(TypeWithQualifier)
+	if !ok {
+		return t
+	}
+
+	return Peel(twq.Type)
 }

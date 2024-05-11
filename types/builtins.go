@@ -6,58 +6,61 @@ import (
 )
 
 // / Definitions
-type baseType struct{}
+type BaseType struct{}
 
 type uncertainType struct {
-	baseType
+	BaseType
 }
 type voidType struct {
-	baseType
+	BaseType
 }
 type boolType struct {
-	baseType
+	BaseType
 }
 type intType struct {
-	baseType
+	BaseType
 }
 type floatType struct {
-	baseType
+	BaseType
+}
+type stringType struct {
+	BaseType
 }
 type boxType struct {
-	baseType
+	BaseType
 }
 type colorType struct {
-	baseType
+	BaseType
 }
 type pointType struct { // chart.point
-	baseType
+	BaseType
 }
 type labelType struct {
-	baseType
+	BaseType
 }
 type lineType struct {
-	baseType
+	BaseType
 }
 type lineFillType struct {
-	baseType
+	BaseType
 }
 type polyLineType struct {
-	baseType
+	BaseType
 }
 type tableType struct {
-	baseType
+	BaseType
 }
 type mapType struct {
-	baseType
+	BaseType
 	key   Type
 	value Type
 }
 type arrayType struct {
-	baseType
+	BaseType
 	item Type
 }
 type matrixType struct {
-	baseType
+	BaseType
 	unit Type
 }
 type TypeWithName struct {
@@ -66,15 +69,15 @@ type TypeWithName struct {
 	Optional bool
 }
 type structType struct {
-	baseType
+	BaseType
 	fields []TypeWithName
 }
 type tupleType struct {
-	baseType
+	BaseType
 	items []Type
 }
 type functionType struct {
-	baseType
+	BaseType
 	in  []TypeWithName
 	out Type
 }
@@ -85,7 +88,9 @@ var Void = new(voidType)
 var Bool = new(boolType)
 var Int = new(intType)
 var Float = new(floatType)
+var String = new(stringType)
 var Box = new(boxType)
+var Color = new(colorType)
 var Point = new(pointType)
 var Label = new(labelType)
 var Line = new(lineType)
@@ -154,6 +159,10 @@ func (i intType) Kind() TypeKind {
 
 func (f floatType) Kind() TypeKind {
 	return FloatKind
+}
+
+func (s stringType) Kind() TypeKind {
+	return StringKind
 }
 
 func (b boxType) Kind() TypeKind {
@@ -233,6 +242,10 @@ func (f floatType) String() string {
 	return "float"
 }
 
+func (s stringType) String() string {
+	return "string"
+}
+
 func (b boxType) String() string {
 	return "box"
 }
@@ -305,25 +318,8 @@ func (f functionType) String() string {
 	return fmt.Sprintf("(%s) => %s", strings.Join(ins, ", "), f.out.String())
 }
 
-// Utilities
-func CanDoImplicitConversion(from, to Type) bool {
-	if to.Kind() == UncertainKind && from.Kind() != UncertainKind && from.Kind() != VoidKind {
-		// na can be casted to almost any types
-		return true
-	}
-	if to.Kind() == BoolKind {
-		if from.Kind() == IntKind || from.Kind() == FloatKind {
-			return true
-		}
-	} else if to.Kind() == FloatKind && from.Kind() == IntKind {
-		return true
-	}
-
-	return false
-}
-
 // containers
-func (bt baseType) Unit() Type {
+func (bt BaseType) Unit() Type {
 	panic("not applicable")
 }
 
@@ -332,15 +328,15 @@ func (a arrayType) Unit() Type {
 }
 
 func (m matrixType) Unit() Type {
-	return m.unit
+	return ArrayOf(m.unit)
 }
 
 // map
-func (bt baseType) Key() Type {
+func (bt BaseType) Key() Type {
 	panic("not applicable")
 }
 
-func (bt baseType) Value() Type {
+func (bt BaseType) Value() Type {
 	panic("not applicable")
 }
 
@@ -353,7 +349,7 @@ func (m mapType) Value() Type {
 }
 
 // Count()
-func (bt baseType) Count() int {
+func (bt BaseType) Count() int {
 	panic("not applicable")
 }
 
@@ -366,15 +362,15 @@ func (tt tupleType) Count() int {
 }
 
 // structs
-func (bt baseType) Fields() []TypeWithName {
+func (bt BaseType) Fields() []TypeWithName {
 	panic("not applicable")
 }
 
-func (bt baseType) Field(i int) TypeWithName {
+func (bt BaseType) Field(i int) TypeWithName {
 	panic("not applicable")
 }
 
-func (bt baseType) FieldByName(name string) *TypeWithName {
+func (bt BaseType) FieldByName(name string) *TypeWithName {
 	panic("not applicable")
 }
 
@@ -400,7 +396,7 @@ func (st structType) FieldByName(name string) *TypeWithName {
 }
 
 // tuple
-func (bt baseType) Items() []Type {
+func (bt BaseType) Items() []Type {
 	panic("not applicable")
 }
 
@@ -412,7 +408,7 @@ func (tt tupleType) Items() []Type {
 	return result
 }
 
-func (bt baseType) Item(i int) Type {
+func (bt BaseType) Item(i int) Type {
 	panic("not applicable")
 }
 

@@ -1,6 +1,9 @@
 package ast
 
-import "github.com/kvarenzn/pinecone/metainfo"
+import (
+	"github.com/kvarenzn/pinecone/metainfo"
+	"github.com/kvarenzn/pinecone/types"
+)
 
 type Node interface {
 	Range() (metainfo.Location, metainfo.Location)
@@ -9,11 +12,23 @@ type Node interface {
 	SetBegin(metainfo.Location)
 	End() metainfo.Location
 	SetEnd(metainfo.Location)
+	NodeType() types.Type
+	MarkNodeType(types.Type)
+	Parent() Node
+	SetParent(Node)
+	PathAttribute() string
+	PathIndex() int
+	SetPathAttribute(string)
+	SetPathIndex(int)
 }
 
 type node struct {
-	begin metainfo.Location
-	end   metainfo.Location
+	begin       metainfo.Location
+	end         metainfo.Location
+	nodeType    types.Type
+	parent      Node
+	rpAttribute string
+	rpIndex     int
 }
 
 func (n *node) Range() (metainfo.Location, metainfo.Location) {
@@ -44,6 +59,38 @@ func (n *node) End() metainfo.Location {
 
 func (n *node) SetEnd(loc metainfo.Location) {
 	n.end = loc
+}
+
+func (n *node) NodeType() types.Type {
+	return n.nodeType
+}
+
+func (n *node) MarkNodeType(t types.Type) {
+	n.nodeType = t
+}
+
+func (n *node) Parent() Node {
+	return n.parent
+}
+
+func (n *node) SetParent(parent Node) {
+	n.parent = parent
+}
+
+func (n *node) PathAttribute() string {
+	return n.rpAttribute
+}
+
+func (n *node) PathIndex() int {
+	return n.rpIndex
+}
+
+func (n *node) SetPathAttribute(name string) {
+	n.rpAttribute = name
+}
+
+func (n *node) SetPathIndex(i int) {
+	n.rpIndex = i
 }
 
 type SimpleType struct {
@@ -106,6 +153,11 @@ type HRefExpr struct {
 	Offset Node
 }
 
+type BoolLiteral struct {
+	node
+	Value bool
+}
+
 type Identifier struct {
 	node
 	Name string
@@ -132,14 +184,6 @@ type ColorLiteral struct {
 	G float64
 	B float64
 	T float64
-}
-
-type TrueExpr struct {
-	node
-}
-
-type FalseExpr struct {
-	node
 }
 
 type TupleExpr struct {
@@ -236,7 +280,7 @@ type ParamDecl struct {
 	Qualifier *string
 	Type      Node
 	Name      string
-	Default   *string
+	Default   Node
 }
 
 type FuncDeclStmt struct {
@@ -252,7 +296,7 @@ type MemberDecl struct {
 	node
 	Type    Node
 	Name    string
-	Default *string
+	Default Node
 }
 
 type TypeDeclStmt struct {
@@ -272,4 +316,9 @@ type ImportStmt struct {
 type Suite struct {
 	node
 	Body []Node
+}
+
+type Quote struct {
+	node
+	Content Node
 }

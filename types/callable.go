@@ -1,24 +1,20 @@
-package base
+package types
 
-import (
-	"fmt"
-
-	"github.com/kvarenzn/pinecone/types"
-)
+import "fmt"
 
 type Callable interface {
 	Call(args []any) (any, error)
-	Dispatch(args []types.Type, kwargs map[string]types.Type) (types.Type, error)
+	Dispatch(args []Type, kwargs map[string]Type) (Type, error)
 	IsMethod() bool
-	FirstArgType() types.Type
+	FirstArgType() Type
 }
 
 type BuiltinFunction struct {
 	Name     string
 	Function func(args ...any) (any, error)
-	Types    []types.Type
-	OutType  func(args []types.Type, kwargs map[string]types.Type) (types.Type, error)
-	SelfType types.Type
+	Types    []Type
+	OutType  func(args []Type, kwargs map[string]Type) (Type, error)
+	SelfType Type
 	Method   bool
 }
 
@@ -26,7 +22,7 @@ func (bf BuiltinFunction) Call(args []any) (any, error) {
 	return bf.Function(args...)
 }
 
-func matchArgumentType(argTypes []types.TypeWithName, args []types.Type, kwargs map[string]types.Type) bool {
+func matchArgumentType(argTypes []TypeWithName, args []Type, kwargs map[string]Type) bool {
 	argc := len(argTypes)
 	if argc < len(args)+len(kwargs) {
 		return false
@@ -34,13 +30,13 @@ func matchArgumentType(argTypes []types.TypeWithName, args []types.Type, kwargs 
 
 	remainIndex := 0
 	for i, a := range args {
-		if !types.Equal(argTypes[i].Type, a) && !types.CanDoImplicitConversion(a, argTypes[i].Type) {
+		if !Equal(argTypes[i].Type, a) && !CanDoImplicitConversion(a, argTypes[i].Type) {
 			return false
 		}
 		remainIndex++
 	}
 
-	remains := map[string]types.TypeWithName{}
+	remains := map[string]TypeWithName{}
 
 	for i := remainIndex; i < argc; i++ {
 		remains[argTypes[i].Name] = argTypes[i]
@@ -51,7 +47,7 @@ func matchArgumentType(argTypes []types.TypeWithName, args []types.Type, kwargs 
 		if !ok {
 			return false
 		}
-		if !types.Equal(req.Type, v) && !types.CanDoImplicitConversion(v, req.Type) {
+		if !Equal(req.Type, v) && !CanDoImplicitConversion(v, req.Type) {
 			return false
 		}
 
@@ -67,7 +63,7 @@ func matchArgumentType(argTypes []types.TypeWithName, args []types.Type, kwargs 
 	return true
 }
 
-func (bf BuiltinFunction) Dispatch(args []types.Type, kwargs map[string]types.Type) (types.Type, error) {
+func (bf BuiltinFunction) Dispatch(args []Type, kwargs map[string]Type) (Type, error) {
 	if bf.OutType != nil {
 		return bf.OutType(args, kwargs)
 	}
@@ -90,7 +86,7 @@ func (bf BuiltinFunction) IsMethod() bool {
 	return bf.Method == true
 }
 
-func (bf BuiltinFunction) FirstArgType() types.Type {
+func (bf BuiltinFunction) FirstArgType() Type {
 	if !bf.IsMethod() {
 		return nil
 	}
@@ -98,7 +94,7 @@ func (bf BuiltinFunction) FirstArgType() types.Type {
 		return bf.SelfType
 	}
 
-	var selfType types.Type = nil
+	var selfType Type = nil
 	for _, fnt := range bf.Types {
 		if fnt.Count() < 1 {
 			return nil
@@ -109,9 +105,29 @@ func (bf BuiltinFunction) FirstArgType() types.Type {
 			continue
 		}
 
-		if !types.Equal(selfType, fnt.In(0).Type) {
+		if !Equal(selfType, fnt.In(0).Type) {
 			return nil
 		}
 	}
 	return selfType
+}
+
+
+func CallableTypeWrap(callable Callable) CallableType {
+	return CallableType{
+		Callable: callable,
+	}
+}
+
+type CallableType struct {
+	BaseType
+	Callable Callable
+}
+
+func (ct CallableType) Kind() TypeKind {
+	return CallableKind
+}
+
+func (ct CallableType) String() string {
+	return "callable"
 }

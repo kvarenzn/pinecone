@@ -9,6 +9,7 @@ const (
 	BoolKind
 	IntKind
 	FloatKind
+	StringKind
 	BoxKind
 	ColorKind
 	PointKind
@@ -24,8 +25,16 @@ const (
 	MatrixKind
 	MapKind
 	StructKind // User Defined Types
-	TupleKind // Used as function return value
+	TupleKind  // Used as function return value
 	FunctionKind
+
+	// special kinds
+	NamespaceKind
+	TypeOrCtorKind
+	CallableKind
+
+	// private types
+	UnionKind
 
 	maxTypeKind
 )
